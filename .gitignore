@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.DS_Store
+*.log
+*.sqlite3
+*.db
+venv/
+
+*.md
+output.csv

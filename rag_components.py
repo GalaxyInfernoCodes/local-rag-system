@@ -8,52 +8,50 @@
 # 4. Use the vector storage to query the knowledge base.
 
 from openai import OpenAI
-import pandas as pd
-import glob
-from markdown_it import MarkdownIt
+from markdown_processor import process_markdown_files
+import psycopg2
 
 client = OpenAI()
 
-md_files = glob.glob("*.md")
-md_contents = [open(file, "r").read() for file in md_files]
+process_markdown_files(client)
 
-md = MarkdownIt()
+conn = psycopg2.connect(
+    dbname="embedding_db",
+    user="dev_user",
+    password="dev_password",
+    host="localhost",
+    port="5433",
+)
 
-data = []
-for content in md_contents:
-    tokens = md.parse(content)
-    # Extract the first headline
-    headline = None
-    for token in tokens:
-        if token.type == "heading_open" and token.tag == "h1":
-            # The next token should be the actual text of the heading
-            headline = tokens[tokens.index(token) + 1].content
-            break
+# Open a cursor to perform database operations
+cursor = conn.cursor()
 
-    body = " ".join(token.content for token in tokens if token.type == "inline")
+# Execute SQL statements
+cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-    # Generate a short summary of the whole document using OpenAI API
-    completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {
-                "role": "developer",
-                "content": "Summarize the following document in a short sentence:",
-            },
-            {"role": "user", "content": body},
-        ],
-        max_tokens=50,
-    )
-    summary = completion.choices[0].message.content
-    print("Summary:", summary)
+cursor.execute(
+    """
+    CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        embedding VECTOR(3) -- Example for 3-dimensional vectors
+    );
+"""
+)
 
-    embedding_response = client.embeddings.create(
-        input=body, model="text-embedding-3-large"
-    )
-    embedding_vector = embedding_response.data[0].embedding
-    data.append({"title": headline, "content": summary, "embedding": embedding_vector})
+cursor.execute(
+    """
+    INSERT INTO items (embedding) VALUES 
+    ('[0.1, 0.2, 0.3]'), 
+    ('[0.4, 0.5, 0.6]');
+"""
+)
 
+# Fetch and print the results
+cursor.execute("SELECT * FROM items;")
+items = cursor.fetchall()
+for item in items:
+    print(item)
 
-df = pd.DataFrame(data)
-print(df)
-df.to_csv('output.csv', index=False)
+# Close communication with the database
+cursor.close()
+conn.close()

@@ -41,13 +41,13 @@ def process_markdown_files(openai_client: OpenAI):
         print("Summary:", summary)
 
         embedding_response = client.embeddings.create(
-            input=body, model="text-embedding-3-large"
+            input=body, model="text-embedding-3-large", dimensions=1600
         )
         embedding_vector = embedding_response.data[0].embedding
+
         data.append(
             {"title": headline, "content": summary, "embedding": embedding_vector}
         )
 
     df = pd.DataFrame(data)
-    print(df)
-    df.to_csv("output.csv", index=False)
+    return df

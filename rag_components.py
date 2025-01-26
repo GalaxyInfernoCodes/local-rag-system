@@ -6,14 +6,12 @@
 # 2. Use the few embeddings to enrich a query to an LLM.
 # 3. Set up a Docker container for the vector storage, including an index using pgvector.
 # 4. Use the vector storage to query the knowledge base.
-
+# %%
 from openai import OpenAI
 from markdown_processor import process_markdown_files
 import psycopg2
 
 client = OpenAI()
-
-process_markdown_files(client)
 
 conn = psycopg2.connect(
     dbname="embedding_db",
@@ -23,31 +21,45 @@ conn = psycopg2.connect(
     port="5433",
 )
 
+embeddings_df = process_markdown_files(client)
+
+# %%
+
+embedding_dimension = len(embeddings_df["embedding"][0])
+print("Embedding dimension:", embedding_dimension)
+
+# %%
+
 # Open a cursor to perform database operations
 cursor = conn.cursor()
 
 # Execute SQL statements
 cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
+# Create the table with title, content, and embedding columns
 cursor.execute(
-    """
-    CREATE TABLE IF NOT EXISTS items (
+    f"""
+    CREATE TABLE IF NOT EXISTS documents (
         id SERIAL PRIMARY KEY,
-        embedding VECTOR(3) -- Example for 3-dimensional vectors
+        title TEXT,
+        content TEXT,
+        embedding VECTOR({embedding_dimension}) -- Adjust the dimension based on your actual embedding size
     );
-"""
+    """
 )
 
-cursor.execute(
-    """
-    INSERT INTO items (embedding) VALUES 
-    ('[0.1, 0.2, 0.3]'), 
-    ('[0.4, 0.5, 0.6]');
-"""
-)
+for index, row in embeddings_df.iterrows():
+    cursor.execute(
+        """
+        INSERT INTO documents (title, content, embedding) VALUES (%s, %s, %s);
+        """,
+        (row["title"], row["content"], row["embedding"]),
+    )
+
+conn.commit()
 
 # Fetch and print the results
-cursor.execute("SELECT * FROM items;")
+cursor.execute("SELECT * FROM documents;")
 items = cursor.fetchall()
 for item in items:
     print(item)
@@ -55,3 +67,5 @@ for item in items:
 # Close communication with the database
 cursor.close()
 conn.close()
+
+# %%

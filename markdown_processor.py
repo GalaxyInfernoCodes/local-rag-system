@@ -4,26 +4,36 @@ import glob
 from markdown_it import MarkdownIt
 
 
+def extract_markdown_content(file_path: str) -> str:
+    with open(file_path, "r") as file:
+        return file.read()
+
+
+def extract_markdown_info(md: MarkdownIt, content: str) -> tuple[str, str]:
+    tokens = md.parse(content)
+    # Extract the first headline
+    headline = None
+    for token in tokens:
+        if token.type == "heading_open" and token.tag == "h1":
+            # The next token should be the actual text of the heading
+            headline = tokens[tokens.index(token) + 1].content
+            break
+
+    body = " ".join(token.content for token in tokens if token.type == "inline")
+    return headline, body
+
+
 def process_markdown_files(openai_client: OpenAI):
     client = openai_client
 
     md_files = glob.glob("*.md")
-    md_contents = [open(file, "r").read() for file in md_files]
+    md_contents = [extract_markdown_content(file) for file in md_files]
 
     md = MarkdownIt()
 
     data = []
     for content in md_contents:
-        tokens = md.parse(content)
-        # Extract the first headline
-        headline = None
-        for token in tokens:
-            if token.type == "heading_open" and token.tag == "h1":
-                # The next token should be the actual text of the heading
-                headline = tokens[tokens.index(token) + 1].content
-                break
-
-        body = " ".join(token.content for token in tokens if token.type == "inline")
+        headline, body = extract_markdown_info(md, content)
 
         # Generate a short summary of the whole document using OpenAI API
         completion = client.chat.completions.create(

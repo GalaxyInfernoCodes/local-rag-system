@@ -6,11 +6,95 @@
 # 2. Use the few embeddings to enrich a query to an LLM.
 # 3. Set up a Docker container for the vector storage, including an index using pgvector.
 # 4. Use the vector storage to query the knowledge base.
+
+## Todo list
+# - add the file name/path to the dataframe and table
+# - write function to retrieve the file contents for the most similar embedding
+# - write function to enrich the query with the found content
+# - generate answer based on query and found context
+# - check chunking - right now the embedding inputs might actually be too long and get truncated, so we need to chunk them
+# - implement the chunking
+
 # %%
 from openai import OpenAI
 from markdown_processor import process_markdown_files
 import psycopg2
+import pandas as pd
 
+
+# %%
+def set_up_embedding_table(
+    conn: psycopg2.extensions.connection, embedding_dimension: int = 1600
+):
+    cursor = conn.cursor()
+    cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    cursor.execute("DROP TABLE IF EXISTS documents;")
+
+    cursor.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS documents (
+            id SERIAL PRIMARY KEY,
+            title TEXT,
+            content TEXT,
+            embedding VECTOR({embedding_dimension})
+        );
+        """
+    )
+    conn.commit()
+    cursor.close()
+
+
+def insert_embeddings(
+    conn: psycopg2.extensions.connection, embeddings_df: pd.DataFrame
+):
+    cursor = conn.cursor()
+
+    for _, row in embeddings_df.iterrows():
+        cursor.execute(
+            """
+            INSERT INTO documents (title, content, embedding) VALUES (%s, %s, %s);
+            """,
+            (row["title"], row["content"], row["embedding"]),
+        )
+
+    conn.commit()
+    cursor.close()
+
+
+def print_db_contents(conn: psycopg2.extensions.connection):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents;")
+    rows = cursor.fetchall()
+    for row in rows:
+        print(row)
+
+    cursor.close()
+
+
+def create_embedding_for_string(open_ai_client: OpenAI, input_str: str) -> list[float]:
+    embedding_response = open_ai_client.embeddings.create(
+        input=input_str, model="text-embedding-3-large", dimensions=1600
+    )
+    embedding_vector = embedding_response.data[0].embedding
+    return embedding_vector
+
+
+def query_vector_db(
+    conn: psycopg2.extensions.connection, open_ai_client: OpenAI, query: str
+):
+    query_embedding = create_embedding_for_string(open_ai_client, query)
+
+    cursor = conn.cursor()
+    query = """SELECT * FROM documents
+                ORDER BY embedding <-> %s::vector
+                LIMIT 1;"""
+    cursor.execute(query, (query_embedding,))
+    result = cursor.fetchone()
+    cursor.close()
+    return result
+
+
+# %%
 client = OpenAI()
 
 conn = psycopg2.connect(
@@ -21,6 +105,8 @@ conn = psycopg2.connect(
     port="5433",
 )
 
+# %%
+
 embeddings_df = process_markdown_files(client)
 
 # %%
@@ -30,42 +116,24 @@ print("Embedding dimension:", embedding_dimension)
 
 # %%
 
-# Open a cursor to perform database operations
-cursor = conn.cursor()
+set_up_embedding_table(conn, embedding_dimension)
 
-# Execute SQL statements
-cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+# %%
 
-# Create the table with title, content, and embedding columns
-cursor.execute(
-    f"""
-    CREATE TABLE IF NOT EXISTS documents (
-        id SERIAL PRIMARY KEY,
-        title TEXT,
-        content TEXT,
-        embedding VECTOR({embedding_dimension}) -- Adjust the dimension based on your actual embedding size
-    );
-    """
-)
+insert_embeddings(conn, embeddings_df)
 
-for index, row in embeddings_df.iterrows():
-    cursor.execute(
-        """
-        INSERT INTO documents (title, content, embedding) VALUES (%s, %s, %s);
-        """,
-        (row["title"], row["content"], row["embedding"]),
-    )
+# %%
 
-conn.commit()
+print_db_contents(conn)
 
-# Fetch and print the results
-cursor.execute("SELECT * FROM documents;")
-items = cursor.fetchall()
-for item in items:
-    print(item)
+# %%
 
-# Close communication with the database
-cursor.close()
+query = "How do I use AI for my day-to-day tasks?"
+result = query_vector_db(conn, client, query)
+print(result)
+
+# %%
+
 conn.close()
 
 # %%

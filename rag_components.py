@@ -35,8 +35,10 @@ def set_up_embedding_table(
         CREATE TABLE IF NOT EXISTS documents (
             id SERIAL PRIMARY KEY,
             title TEXT,
-            content TEXT,
-            embedding VECTOR({embedding_dimension})
+            summary TEXT,
+            embedding VECTOR({embedding_dimension}),
+            text_chunk TEXT,
+            chunk_id INTEGER
         );
         """
     )
@@ -52,9 +54,9 @@ def insert_embeddings(
     for _, row in embeddings_df.iterrows():
         cursor.execute(
             """
-            INSERT INTO documents (title, content, embedding) VALUES (%s, %s, %s);
+            INSERT INTO documents (title, summary, embedding, text_chunk, chunk_id) VALUES (%s, %s, %s, %s, %s);
             """,
-            (row["title"], row["content"], row["embedding"]),
+            (row["title"], row["summary"], row["embedding"], row["text_chunk"], row["chunk_id"]),
         )
 
     conn.commit()

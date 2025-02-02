@@ -15,14 +15,11 @@
 # - check chunking - right now the embedding inputs might actually be too long and get truncated, so we need to chunk them
 # - implement the chunking
 
-# %%
 from openai import OpenAI
-from markdown_processor import process_markdown_files
 import psycopg2
 import pandas as pd
 
 
-# %%
 def set_up_embedding_table(
     conn: psycopg2.extensions.connection, embedding_dimension: int = 1600
 ):
@@ -56,7 +53,13 @@ def insert_embeddings(
             """
             INSERT INTO documents (title, summary, embedding, text_chunk, chunk_id) VALUES (%s, %s, %s, %s, %s);
             """,
-            (row["title"], row["summary"], row["embedding"], row["text_chunk"], row["chunk_id"]),
+            (
+                row["title"],
+                row["summary"],
+                row["embedding"],
+                row["text_chunk"],
+                row["chunk_id"],
+            ),
         )
 
     conn.commit()
@@ -73,6 +76,14 @@ def print_db_contents(conn: psycopg2.extensions.connection):
     cursor.close()
 
 
+def count_db_entries(conn: psycopg2.extensions.connection) -> int:
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM documents;")
+    count = cursor.fetchone()[0]
+    cursor.close()
+    return count
+
+
 def create_embedding_for_string(open_ai_client: OpenAI, input_str: str) -> list[float]:
     embedding_response = open_ai_client.embeddings.create(
         input=input_str, model="text-embedding-3-large", dimensions=1600
@@ -87,55 +98,38 @@ def query_vector_db(
     query_embedding = create_embedding_for_string(open_ai_client, query)
 
     cursor = conn.cursor()
-    query = """SELECT * FROM documents
+    query = """SELECT title, summary, text_chunk, chunk_id, embedding FROM documents
                 ORDER BY embedding <-> %s::vector
                 LIMIT 1;"""
     cursor.execute(query, (query_embedding,))
     result = cursor.fetchone()
     cursor.close()
+
+    if result:
+        title, summary, text_chunk, chunk_id, embedding = result
+        print(f"Most similar document: {title}")
+        print(f"Summary: {summary}")
+        print(f"Text Chunk: {text_chunk}")
+        print(f"Chunk ID: {chunk_id}")
+
     return result
 
 
-# %%
-client = OpenAI()
-
-conn = psycopg2.connect(
-    dbname="embedding_db",
-    user="dev_user",
-    password="dev_password",
-    host="localhost",
-    port="5433",
-)
-
-# %%
-
-embeddings_df = process_markdown_files(client)
-
-# %%
-
-embedding_dimension = len(embeddings_df["embedding"][0])
-print("Embedding dimension:", embedding_dimension)
-
-# %%
-
-set_up_embedding_table(conn, embedding_dimension)
-
-# %%
-
-insert_embeddings(conn, embeddings_df)
-
-# %%
-
-print_db_contents(conn)
-
-# %%
-
-query = "How do I use AI for my day-to-day tasks?"
-result = query_vector_db(conn, client, query)
-print(result)
-
-# %%
-
-conn.close()
-
-# %%
+def answer_query_with_context(
+    open_ai_client: OpenAI, user_query: str, context: str
+) -> str:
+    # Send the user's query along with the context to the LLM
+    completion = open_ai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "system",
+                "content": "Use the provided context to answer the user's query.",
+            },
+            {"role": "user", "content": user_query},
+            {"role": "assistant", "content": context},
+        ],
+        max_tokens=2000,
+    )
+    answer = completion.choices[0].message.content
+    return answer

@@ -24,10 +24,11 @@ def extract_markdown_info(md: MarkdownIt, content: str) -> tuple[str, str]:
     return headline, body
 
 
-def process_markdown_files(openai_client: OpenAI):
+def process_markdown_files(openai_client: OpenAI, base_path: str):
     client = openai_client
 
-    md_files = glob.glob("*.md")
+    # Use glob to find markdown files in subdirectories of the base_path
+    md_files = glob.glob(f"{base_path}/**/*.md", recursive=True)
     md_contents = [extract_markdown_content(file) for file in md_files]
 
     md = MarkdownIt()
@@ -60,7 +61,6 @@ def process_markdown_files(openai_client: OpenAI):
                 max_tokens=50,
             )
             summary = completion.choices[0].message.content
-            print("Summary:", summary)
 
             embedding_response = client.embeddings.create(
                 input=chunk, model="text-embedding-3-large", dimensions=1600

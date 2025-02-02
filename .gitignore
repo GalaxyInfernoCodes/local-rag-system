@@ -10,5 +10,5 @@ __pycache__/
 *.db
 venv/
 
-*.md
-output.csv
+
+markdown_source_files/*.md

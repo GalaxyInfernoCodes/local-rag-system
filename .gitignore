@@ -9,6 +9,6 @@ __pycache__/
 *.sqlite3
 *.db
 venv/
-
+.venv/
 
 markdown_source_files/*.md

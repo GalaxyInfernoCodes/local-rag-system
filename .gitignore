@@ -11,4 +11,4 @@ __pycache__/
 venv/
 .venv/
 
-markdown_source_files/*.md
+project_config.yaml

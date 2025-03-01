@@ -32,7 +32,7 @@ def set_up_embedding_table(
         CREATE TABLE IF NOT EXISTS documents (
             id SERIAL PRIMARY KEY,
             title TEXT,
-            summary TEXT,
+            start_of_chunk TEXT,
             embedding VECTOR({embedding_dimension}),
             text_chunk TEXT,
             chunk_id INTEGER
@@ -51,11 +51,11 @@ def insert_embeddings(
     for _, row in embeddings_df.iterrows():
         cursor.execute(
             """
-            INSERT INTO documents (title, summary, embedding, text_chunk, chunk_id) VALUES (%s, %s, %s, %s, %s);
+            INSERT INTO documents (title, start_of_chunk, embedding, text_chunk, chunk_id) VALUES (%s, %s, %s, %s, %s);
             """,
             (
                 row["title"],
-                row["summary"],
+                row["start_of_chunk"],
                 row["embedding"],
                 row["text_chunk"],
                 row["chunk_id"],
@@ -98,18 +98,17 @@ def query_vector_db(
     query_embedding = create_embedding_for_string(open_ai_client, query)
 
     cursor = conn.cursor()
-    query = """SELECT title, summary, text_chunk, chunk_id, embedding FROM documents
+    query = """SELECT title, start_of_chunk, text_chunk, chunk_id, embedding FROM documents
                 ORDER BY embedding <-> %s::vector
-                LIMIT 1;"""
+                LIMIT 3;"""
     cursor.execute(query, (query_embedding,))
     result = cursor.fetchone()
     cursor.close()
 
     if result:
-        title, summary, text_chunk, chunk_id, embedding = result
+        title, start_of_chunk, text_chunk, chunk_id, embedding = result
         print(f"Most similar document: {title}")
-        print(f"Summary: {summary}")
-        print(f"Text Chunk: {text_chunk}")
+        print(f"Start of Chunk: {start_of_chunk}")
         print(f"Chunk ID: {chunk_id}")
 
     return result

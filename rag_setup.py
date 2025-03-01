@@ -15,7 +15,7 @@ conn = psycopg2.connect(
 )
 
 
-embeddings_df = process_markdown_files(client, "./markdown_source_files/")
+embeddings_df = process_markdown_files(client, "./project_config.yaml")
 embedding_dimension = len(embeddings_df["embedding"][0])
 print("Embedding dimension:", embedding_dimension)
 

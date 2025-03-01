@@ -31,7 +31,17 @@ Replace `your-openai-api-key` with your actual OpenAI API key.
 
 A tutorial on how the database is set up and explanations for the settings can be found [here](https://sarahglasmacher.com/how-to-pgvector-docker-local-vector-database/).
 
-### Step 2: Install Python Requirements
+### Step 2: Configure Markdown Sources
+
+Copy the example configuration file and edit it to specify your markdown source paths:
+```bash
+cp project_config_example.yaml project_config.yaml
+```
+
+Open `project_config.yaml` and replace the example paths with the paths to your desired markdown sources. Ensure the paths are correctly indented as shown in the example file.
+
+
+### Step 3: Install Python Requirements
 
 Set up a local virtual environment and install the Python requirements using `uv`:
    ```bash
@@ -42,7 +52,7 @@ This command will create a virtual environment and install all dependencies spec
 
 Alternatively, you can use another tool like `poetry` to install the needed libraries found as dependencies in the `pyproject.toml` file.
 
-### Step 3: Fill the RAG Database
+### Step 4: Fill the RAG Database
 
 1. Run the database setup script:
    ```bash
@@ -50,7 +60,7 @@ Alternatively, you can use another tool like `poetry` to install the needed libr
    ```
    This script will populate the RAG database with the necessary data.
 
-### Step 4: Start the Frontend
+### Step 5: Start the Frontend
 
 1. Run the frontend script to start the Gradio application:
    ```bash

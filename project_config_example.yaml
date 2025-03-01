@@ -1,0 +1,7 @@
+# List of parent folders to be used as markdown sources
+markdown_sources:
+  - /path/to/first/source
+  - /path/to/second/source
+  - /path/to/third/source
+  - /path/to/fourth/source
+  - /path/to/fifth/source

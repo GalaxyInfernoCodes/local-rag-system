@@ -12,3 +12,4 @@ venv/
 .venv/
 
 project_config.yaml
+explore_retrieval.ipynb

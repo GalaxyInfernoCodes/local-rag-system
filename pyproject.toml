@@ -14,3 +14,8 @@ dependencies = [
     "pandas>=2.2.3",
     "psycopg2-binary>=2.9.10",
 ]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+]

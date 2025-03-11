@@ -31,7 +31,8 @@ def set_up_embedding_table(
         f"""
         CREATE TABLE IF NOT EXISTS documents (
             id SERIAL PRIMARY KEY,
-            title TEXT,
+            note_title TEXT,
+            note_path TEXT,
             start_of_chunk TEXT,
             embedding VECTOR({embedding_dimension}),
             text_chunk TEXT,
@@ -51,10 +52,11 @@ def insert_embeddings(
     for _, row in embeddings_df.iterrows():
         cursor.execute(
             """
-            INSERT INTO documents (title, start_of_chunk, embedding, text_chunk, chunk_id) VALUES (%s, %s, %s, %s, %s);
+            INSERT INTO documents (note_title, note_path, start_of_chunk, embedding, text_chunk, chunk_id) VALUES (%s, %s, %s, %s, %s, %s);
             """,
             (
-                row["title"],
+                row["note_title"],
+                row["note_path"],
                 row["start_of_chunk"],
                 row["embedding"],
                 row["text_chunk"],
@@ -98,20 +100,49 @@ def query_vector_db(
     query_embedding = create_embedding_for_string(open_ai_client, query)
 
     cursor = conn.cursor()
-    query = """SELECT title, start_of_chunk, text_chunk, chunk_id, embedding FROM documents
-                ORDER BY embedding <-> %s::vector
-                LIMIT 3;"""
+    # query = """SELECT title, start_of_chunk, text_chunk, chunk_id, embedding FROM documents
+    #             ORDER BY embedding <-> %s::vector
+    #             LIMIT 3;"""
+    query = """
+        WITH similarity_calculation AS (
+            SELECT note_title, 
+                note_path, 
+                start_of_chunk, 
+                text_chunk, 
+                chunk_id, 
+                embedding, 
+                1 - (embedding <=> %s::vector) AS cosine_similarity
+            FROM documents
+        )
+        SELECT note_title, 
+            note_path, 
+            start_of_chunk, 
+            text_chunk, 
+            chunk_id, 
+            embedding, 
+            cosine_similarity
+        FROM similarity_calculation
+        WHERE cosine_similarity > 0.5;
+    """
     cursor.execute(query, (query_embedding,))
-    result = cursor.fetchone()
+    results = cursor.fetchall()
     cursor.close()
 
-    if result:
-        title, start_of_chunk, text_chunk, chunk_id, embedding = result
-        print(f"Most similar document: {title}")
+    if len(results) > 0:
+        (
+            note_title,
+            note_path,
+            start_of_chunk,
+            text_chunk,
+            chunk_id,
+            embedding,
+            cosine_similarity,
+        ) = results[0]
+        print(f"Most similar document: {note_title}")
         print(f"Start of Chunk: {start_of_chunk}")
         print(f"Chunk ID: {chunk_id}")
 
-    return result
+    return results
 
 
 def answer_query_with_context(
@@ -123,12 +154,16 @@ def answer_query_with_context(
         messages=[
             {
                 "role": "system",
-                "content": "Use the provided context to answer the user's query.",
+                "content": """You are a helpful assistant helping me at work with access to my personal knowledge system, 
+                with query results being appended to my user query each time.""",
             },
             {"role": "user", "content": user_query},
-            {"role": "assistant", "content": context},
+            {
+                "role": "user",
+                "content": "Here are some notes possibly relevant to this query: "
+                + context,
+            },
         ],
-        max_tokens=2000,
     )
     answer = completion.choices[0].message.content
     return answer

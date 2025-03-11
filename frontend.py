@@ -16,10 +16,10 @@ conn = psycopg2.connect(
 
 def chat_function(message: str, history: str):
     # ignores the history for now - just use the last message
-    result = query_vector_db(conn, client, message)
-    if result:
-        _, _, text_chunk, _, _ = result
-        answer = answer_query_with_context(client, message, text_chunk)
+    results = query_vector_db(conn, client, message)
+    if len(results) > 0:
+        context = "\n".join(result[2] for result in results)  # Extracting text_chunks
+        answer = answer_query_with_context(client, message, context)
     return answer
 
 
